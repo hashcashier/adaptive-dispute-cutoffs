@@ -1,0 +1,34 @@
+{
+  "name": "adaptive-dispute-cutoffs",
+  "author": "Rami Khalil",
+  "license": "GPL-3.0",
+  "homepage": "https://github.com/rami-github/adaptive-dispute-cutoffs#readme",
+  "version": "1.0.0",
+  "description": "Layer-two power-up",
+  "main": "truffle deploy",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "truffle test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/rami-github/adaptive-dispute-cutoffs.git"
+  },
+  "keywords": [
+    "adaptive",
+    "dispute",
+    "cutoff"
+  ],
+  "bugs": {
+    "url": "https://github.com/rami-github/adaptive-dispute-cutoffs/issues"
+  },
+  "dependencies": {
+    "eth-proof": "^2.1.4",
+    "ethereumjs-tx": "^2.1.2",
+    "isomorphic-rpc": "^1.2.1",
+    "keccak": "^3.0.1",
+    "rlp": "^2.2.6"
+  }
+}

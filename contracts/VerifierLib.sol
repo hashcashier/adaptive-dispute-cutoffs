@@ -152,7 +152,7 @@ library VerifierLib {
   function verifyGasCommitmentOpening(
     bytes32 pGasCommitment,
     uint256[2] memory valueWeight,
-    uint256[4][] memory siblingsMinMaxWeightCommits,
+    uint256[4][] memory siblingsCommitWeightMinMax,
     uint256 minBlock,
     uint256 maxBlock
   )
@@ -160,10 +160,12 @@ library VerifierLib {
     pure
     returns (uint256)
   {
+    uint256 boundary = (maxBlock) * RANGE_MOD;
     uint256[3] memory prefixMinMax = TreeLib.openMSMCommitment(
       pGasCommitment,
       valueWeight,
-      siblingsMinMaxWeightCommits);
+      siblingsCommitWeightMinMax,
+      boundary);
     require(minBlock <= prefixMinMax[1]);
     require(prefixMinMax[0] <= maxBlock);
     return prefixMinMax[0];
@@ -180,6 +182,7 @@ library VerifierLib {
     // uint256 alphaClaimed,
     // uint256 confidence,
     // bytes32 pGasCommitment,
+    // uint256 boundary,
     uint256[2][] memory msmValueWeights,
     uint256[4][][] memory msmOpenings,
     bytes[] memory blockHeaders,
@@ -206,14 +209,6 @@ library VerifierLib {
         prefixSum, // prefixSum
         msmValueWeights[i][1] // leafSum
       ), 'g out of range');
-      // require(verifyBlockInclusion(
-      //   //self,
-      //   bytes32(blockInclusionCommitmentStart[i][0]),
-      //   blockHeaders[i],
-      //   msmValueWeights[i][0] / RANGE_MOD, // value / RANGE_MOD = blockNumber
-      //   //blockInclusionCommitments[i],
-      //   blockInclusionCommitmentStart[i][1],
-      //   blockInclusionProofs[i]), 'bad block inclusion proof');
       uint256 txNum = msmValueWeights[i][0] % RANGE_MOD; // value % RANGE_MOD = txNum
       if (txNum == RANGE_MOD - 1) {
         require(verifyBlockGas(

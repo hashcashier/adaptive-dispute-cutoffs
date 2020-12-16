@@ -12,31 +12,86 @@ contract ADC {
   BlocksDBLib.BlocksDB internal blocksDB;
 
   constructor()
-  public
+    public
   {
     blocksDB.init();
   }
 
   function saveBlocks()
-  public
+    public
   {
     blocksDB.saveBlocks();
   }
 
-  function getCommitmentData(
-    uint256[] memory blocksDBCommitmentNumbers
-  )
-    internal
+  function getBlocks()
+    public
     view
-    returns (uint256[2][] memory blockInclusionCommitmentStart)
+    returns (bytes32[] memory commitments, uint256[] memory blockRanges)
   {
-    blockInclusionCommitmentStart = new uint256[2][](blocksDBCommitmentNumbers.length);
-    for (uint256 i = 0; i < blocksDBCommitmentNumbers.length; i++) {
-      uint256 commitmentNumber = blocksDBCommitmentNumbers[i];
-      blockInclusionCommitmentStart[i][0] = uint256(blocksDB.commitments[commitmentNumber]);
-      blockInclusionCommitmentStart[i][1] = blocksDB.blockRanges[commitmentNumber] % RANGE_MOD;
-    }
+    return (blocksDB.commitments, blocksDB.blockRanges);
   }
+
+  function getBlockHashes(
+    uint256 startingBlock,
+    uint256 endingBlock
+  )
+    public
+    view
+    returns (bytes32[] memory)
+  {
+    return BlocksDBLib.getBlockHashes(startingBlock, endingBlock);
+  }
+
+  function calculateBlockHashCommitment(
+    bytes32[] memory blockHashes
+  )
+    public
+    pure
+    returns (bytes32)
+  {
+    return BlocksDBLib.calculateBlockHashCommitment(blockHashes);
+  }
+
+  function verifyTreeMembership(
+    bytes32 root,
+    bytes32 commitment,
+    uint256 index,
+    bytes32[] memory siblings
+  )
+    public
+    pure
+    returns (bool)
+  {
+    return TreeLib.verifyTreeMembership(root, commitment, index, siblings);
+  }
+
+  function openMSMCommitment(
+    bytes32 root,
+    uint256[2] memory valueWeight,
+    uint256[4][] memory siblingsCommitWeightMinMax,
+    uint256 boundary
+  )
+    public
+    pure
+    returns (uint256[3] memory prefixMinMax)
+  {
+    return TreeLib.openMSMCommitment(root, valueWeight, siblingsCommitWeightMinMax, boundary);
+  }
+
+  // function getCommitmentData(
+  //   uint256[] memory blocksDBCommitmentNumbers
+  // )
+  //   internal
+  //   view
+  //   returns (uint256[2][] memory blockInclusionCommitmentStart)
+  // {
+  //   blockInclusionCommitmentStart = new uint256[2][](blocksDBCommitmentNumbers.length);
+  //   for (uint256 i = 0; i < blocksDBCommitmentNumbers.length; i++) {
+  //     uint256 commitmentNumber = blocksDBCommitmentNumbers[i];
+  //     blockInclusionCommitmentStart[i][0] = uint256(blocksDB.commitments[commitmentNumber]);
+  //     blockInclusionCommitmentStart[i][1] = blocksDB.blockRanges[commitmentNumber] % RANGE_MOD;
+  //   }
+  // }
 
   function verifyCGas(
     uint256[8] memory subStack,
