@@ -126,16 +126,41 @@ contract("ADC", async accounts => {
     let pGasTreeBoundary = new BN(lastBlockNumber).mul(RANGE_MOD);
     let pGasTree = merkleSumMinMaxCommitment(pGasLeaves, pGasTreeBoundary);
     let pGasTreeHeight = pGasTree.length;
-    console.log([pGasTree[0].length, pGasTree.length, pGasTree[pGasTree.length - 1].length]);
+    let pGasCommitment = pGasTree[pGasTreeHeight - 1][0][0];
+    let pGasClaimed = pGasTree[pGasTreeHeight - 1][0][1];
     for (var i = 0; i < pGasLeaves.length; i++) {
       let proof = merkleProof(pGasTree, i);
-      let res = await instance.openMSMCommitment(
-        pGasTree[pGasTreeHeight - 1][0][0],
+      let res = await instance.verifyGasCommitmentOpening(
+        pGasCommitment,
         pGasLeaves[i],
         proof,
-        pGasTreeBoundary);
-      // assert.equal(res, true);
-      console.log(res);
+        initialBlockNumber - 1,
+        lastBlockNumber,
+        pGasClaimed);
+    }
+    let pGasChallenges = [];
+    let pGasResponses = [];
+    for(var i = 0; i < 128; i++) {
+      // uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, nonce))) % pGasClaimed;
+      let hashValue = web3.utils.soliditySha3(
+        {type: 'bytes32', value: pGasCommitment},
+        {type: 'uint256', value: i},
+      )
+      let g = new BN(hashValue.slice(2), 16).modn(pGasClaimed);
+      pGasChallenges.push(g);
+      let prefixSum = 0;
+      let leafSum = 0;
+      for(var j = 0; j < pGasLeaves.length; j++) {
+        if (prefixSum + pGasLeaves[j][1] >= g) {
+          pGasResponses.push(j);
+          leafSum = pGasLeaves[j][1];
+          break;
+        }
+        prefixSum += pGasLeaves[j][1];
+      }
+      assert.equal(
+        await instance.verifyGasPosition(pGasCommitment, pGasClaimed, i, prefixSum, leafSum),
+        true);
     }
 
     // let queriedBlock = await web3.eth.getBlock(queriedBlockNumber);

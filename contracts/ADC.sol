@@ -73,9 +73,38 @@ contract ADC {
   )
     public
     pure
-    returns (uint256[3] memory prefixMinMax)
+    returns (uint256[4] memory prefixMinMaxSum)
   {
     return TreeLib.openMSMCommitment(root, valueWeight, siblingsCommitWeightMinMax, boundary);
+  }
+
+  function verifyGasCommitmentOpening(
+    bytes32 pGasCommitment,
+    uint256[2] memory valueWeight,
+    uint256[4][] memory siblingsCommitWeightMinMax,
+    uint256 minBlock,
+    uint256 maxBlock,
+    uint256 totalValue
+  )
+    public
+    pure
+    returns (uint256)
+  {
+    return VerifierLib.verifyGasCommitmentOpening(pGasCommitment, valueWeight, siblingsCommitWeightMinMax, minBlock, maxBlock, totalValue);
+  }
+
+  function verifyGasPosition(
+    bytes32 pGasCommitment,
+    uint256 pGasClaimed,
+    uint256 nonce,
+    uint256 prefixSum,
+    uint256 leafSum
+  )
+    public
+    pure
+    returns (bool)
+  {
+    return VerifierLib.verifyGasPosition(pGasCommitment, pGasClaimed, nonce, prefixSum, leafSum);
   }
 
   // function getCommitmentData(

@@ -152,52 +152,55 @@ library TreeLib {
   )
     internal
     pure
-    returns (uint256[3] memory prefixMinMax)
+    returns (uint256[4] memory prefixMinMaxSum)
   {
-    prefixMinMax[1] = valueWeight[0];
-    prefixMinMax[2] = valueWeight[0];
+    prefixMinMaxSum[1] = valueWeight[0];
+    prefixMinMaxSum[2] = valueWeight[0];
+    prefixMinMaxSum[3] = valueWeight[1];
     bytes32 commitment = keccak256(abi.encodePacked(
       valueWeight[0], // value (comm)
       valueWeight[1], // weight
-      prefixMinMax[1], // min = value
-      prefixMinMax[2])); // max = value
+      prefixMinMaxSum[1], // min = value
+      prefixMinMaxSum[2])); // max = value
     for (uint32 i = 0; i < siblingsCommitWeightMinMax.length; i++) {
       // sanity check
-      require(prefixMinMax[1] <= prefixMinMax[2], 'bad minMax');
+      require(prefixMinMaxSum[1] <= prefixMinMaxSum[2], 'bad minMax');
       require(siblingsCommitWeightMinMax[i][2] <= siblingsCommitWeightMinMax[i][3], 'bad siblingsCommitWeightMinMax[i]');
       // determine pos
-      bool linkLeft = siblingsCommitWeightMinMax[i][2] < prefixMinMax[1];
+      bool linkLeft = siblingsCommitWeightMinMax[i][2] < prefixMinMaxSum[1];
       if (linkLeft) {
-        require(siblingsCommitWeightMinMax[i][3] < prefixMinMax[1], 'bad max-min border');
+        require(siblingsCommitWeightMinMax[i][3] < prefixMinMaxSum[1], 'bad max-min border');
       } else {
         if (siblingsCommitWeightMinMax[i][2] == boundary) {
           require(bytes32(siblingsCommitWeightMinMax[i][0]) == keccak256(abi.encodePacked(boundary, uint256(0), boundary, boundary)));
           require(siblingsCommitWeightMinMax[i][1] == 0);
           require(siblingsCommitWeightMinMax[i][3] == boundary);
         } else {
-          require(siblingsCommitWeightMinMax[i][2] > prefixMinMax[2], 'bad min-max border');
+          require(siblingsCommitWeightMinMax[i][2] > prefixMinMaxSum[2], 'bad min-max border');
         }
       }
       // derive parent node
       valueWeight[1] += siblingsCommitWeightMinMax[i][1];
       if (linkLeft) {
-        prefixMinMax[1] = siblingsCommitWeightMinMax[i][2];
+        prefixMinMaxSum[1] = siblingsCommitWeightMinMax[i][2];
       } else {
-        prefixMinMax[2] = siblingsCommitWeightMinMax[i][3];
+        prefixMinMaxSum[2] = siblingsCommitWeightMinMax[i][3];
       }
       commitment = keccak256(abi.encodePacked(
         i,
         linkLeft ? keccak256(abi.encodePacked(siblingsCommitWeightMinMax[i][0], commitment))
                  : keccak256(abi.encodePacked(commitment, siblingsCommitWeightMinMax[i][0])),
         valueWeight[1],
-        prefixMinMax[1],
-        prefixMinMax[2]));
+        prefixMinMaxSum[1],
+        prefixMinMaxSum[2]));
       // calculate prefixSum
       if (linkLeft) {
-        prefixMinMax[0] += siblingsCommitWeightMinMax[i][1];
+        prefixMinMaxSum[0] += siblingsCommitWeightMinMax[i][1];
       }
+      // calculate totalSum
+      prefixMinMaxSum[3] += siblingsCommitWeightMinMax[i][1];
     }
     require(commitment == root, 'bad msm tree member');
-    return prefixMinMax;
+    return prefixMinMaxSum;
   }
 }

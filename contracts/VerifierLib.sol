@@ -145,8 +145,8 @@ library VerifierLib {
     pure
     returns (bool)
   {
-    uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, pGasClaimed, nonce))) % pGasClaimed;
-    return prefixSum < g && g <= prefixSum + leafSum;
+    uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, nonce))) % pGasClaimed;
+    return prefixSum < g && g <= prefixSum + leafSum && prefixSum + leafSum <= pGasClaimed;
   }
 
   function verifyGasCommitmentOpening(
@@ -154,21 +154,23 @@ library VerifierLib {
     uint256[2] memory valueWeight,
     uint256[4][] memory siblingsCommitWeightMinMax,
     uint256 minBlock,
-    uint256 maxBlock
+    uint256 maxBlock,
+    uint256 totalValue
   )
     internal
     pure
     returns (uint256)
   {
     uint256 boundary = (maxBlock) * RANGE_MOD;
-    uint256[3] memory prefixMinMax = TreeLib.openMSMCommitment(
+    uint256[4] memory prefixMinMaxSum = TreeLib.openMSMCommitment(
       pGasCommitment,
       valueWeight,
       siblingsCommitWeightMinMax,
       boundary);
-    require(minBlock <= prefixMinMax[1]);
-    require(prefixMinMax[0] <= maxBlock);
-    return prefixMinMax[0];
+    require(minBlock <= prefixMinMaxSum[1], 'minBlock <= prefixMinMax[1]');
+    require(prefixMinMaxSum[2] <= boundary, 'prefixMinMax[2] <= maxBlock');
+    require(prefixMinMaxSum[3] == totalValue, 'prefixMinMaxSum[3] == totalValue');
+    return prefixMinMaxSum[0];
   }
 
   function verifyCGas(
@@ -200,12 +202,13 @@ library VerifierLib {
         bytes32(subStack[7]),
         msmValueWeights[i],
         msmOpenings[i],
-        subStack[2],
-        subStack[3]);
+        subStack[2], // startingBlockNum
+        subStack[3], // endingBlockNum
+        subStack[4]); // pGasClaimed
       require(verifyGasPosition(
         bytes32(subStack[7]),
         subStack[4], // pGasClaimed
-        i,
+        i, // nonce
         prefixSum, // prefixSum
         msmValueWeights[i][1] // leafSum
       ), 'g out of range');
