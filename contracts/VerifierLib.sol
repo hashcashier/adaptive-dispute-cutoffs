@@ -125,6 +125,7 @@ library VerifierLib {
     uint256 unusedGas
   )
     internal
+    pure
     returns (bool)
   {
     (uint256 blockGasLimit, uint256 blockGasUsage) = DecodeLib.decodeBlockGasUsed(blockHeader);
@@ -142,6 +143,7 @@ library VerifierLib {
     bytes[] memory priorReceiptInclusionProof
   )
     internal
+    pure
     returns (bool)
   {
     // verify transaction gas
@@ -182,6 +184,7 @@ library VerifierLib {
     bytes32[] memory blockInclusionProof
   )
     internal
+    view
     returns (bool)
   {
     bytes32 blockHash = keccak256(blockHeader);
@@ -200,15 +203,36 @@ library VerifierLib {
     uint256 leafSum
   )
     internal
+    pure
     returns (bool)
   {
     uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, pGasClaimed, nonce))) % pGasClaimed;
     return prefixSum < g && g <= prefixSum + leafSum;
   }
 
+  function verifyGasCommitmentOpening(
+    bytes32 pGasCommitment,
+    uint256[2] memory valueWeight,
+    uint256[4][] memory siblingsMinMaxWeightCommits,
+    uint256 minBlock,
+    uint256 maxBlock
+  )
+    internal
+    pure
+    returns (uint256)
+  {
+    uint256[3] memory prefixMinMax = TreeLib.openMSMCommitment(
+      pGasCommitment,
+      valueWeight,
+      siblingsMinMaxWeightCommits);
+    require(minBlock <= prefixMinMax[1]);
+    require(prefixMinMax[0] <= maxBlock);
+    return prefixMinMax[0];
+  }
+
   function verifyCGas(
     BlocksDB storage self,
-    uint256[7] memory subStack,
+    uint256[8] memory subStack,
     // uint256 maxGasPrice,
     // uint256 disputeGasCost,
     // uint256 startingBlockNum,
@@ -216,42 +240,44 @@ library VerifierLib {
     // uint256 pGasClaimed,
     // uint256 alphaClaimed,
     // uint256 confidence,
-    bytes32 pGasCommitment,
-    bytes32[][] memory msmOpenings,
+    // bytes32 pGasCommitment,
+    uint256[2][] memory msmValueWeights,
+    uint256[4][][] memory msmOpenings,
     bytes[] memory blockHeaders,
     uint256[] memory blockInclusionCommitments,
     bytes32[][] memory blockInclusionProofs,
     bytes[][] memory txInclusionProofs,
-    bytes[] memory txNumKeys
+    bytes[2][] memory txNumKeys
   )
     public
-    returns (uint256 cGasVerified)
+    view
+    returns (uint256)
   {
     for (uint256 i = 0; i < msmOpenings.length; i++) {
-      uint256[3] memory prefixLeafVal = TreeLib.openMSMCommitment(
-        pGasCommitment,
-        subStack[4], // pGasClaimed
-        subStack[2], // startingBlockNum
-        subStack[3], // endingBlockNum
-        msmOpenings[i]);
+      uint256 prefixSum = verifyGasCommitmentOpening(
+        bytes32(subStack[7]),
+        msmValueWeights[i],
+        msmOpenings[i],
+        subStack[2],
+        subStack[3]);
       require(verifyGasPosition(
-        pGasCommitment,
+        bytes32(subStack[7]),
         subStack[4], // pGasClaimed
         i,
-        prefixLeafVal[0], // prefixSum
-        prefixLeafVal[1] // leafSum
+        prefixSum, // prefixSum
+        msmValueWeights[i][1] // leafSum
       ), 'g out of range');
       require(verifyBlockInclusion(
         self,
         blockHeaders[i],
-        prefixLeafVal[2] / RANGE_MOD, // value / RANGE_MOD = blockNumber
+        msmValueWeights[i][0] / RANGE_MOD, // value / RANGE_MOD = blockNumber
         blockInclusionCommitments[i],
         blockInclusionProofs[i]), 'bad block inclusion proof');
-      uint256 txNum = prefixLeafVal[2] % RANGE_MOD; // value % RANGE_MOD = txNum
+      uint256 txNum = msmValueWeights[i][0] % RANGE_MOD; // value % RANGE_MOD = txNum
       if (txNum == RANGE_MOD - 1) {
         require(verifyBlockGas(
           blockHeaders[i],
-          prefixLeafVal[1] // leafSum
+          msmValueWeights[i][1] // leafSum
         ), 'bad unused block gas');
       } else {
         require(verifyTransactionGas(
@@ -259,7 +285,7 @@ library VerifierLib {
           txNum,
           txNumKeys[i],
           subStack[0], // maxGasPrice
-          prefixLeafVal[1], // leafSum
+          msmValueWeights[i][1], // leafSum
           txInclusionProofs[3*i], // tx inclusion proof
           txInclusionProofs[3*i+1], // receipt inclusion proof
           txInclusionProofs[3*i+2])); // prior receipt inclusion proof
