@@ -11,7 +11,7 @@ library DecodeLib {
   function decodeTxReceiptRoots(
     bytes memory blockHeader
   )
-    public
+    internal
     pure
     returns(bytes32[2] memory)
   {
@@ -24,7 +24,7 @@ library DecodeLib {
   function decodeBlockGasUsed(
     bytes memory blockHeader
   )
-    public
+    internal
     pure
     returns(uint256 limit, uint256 used)
   {

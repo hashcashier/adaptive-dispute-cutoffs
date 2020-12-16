@@ -1,0 +1,89 @@
+pragma solidity >=0.4.21 <0.7.0;
+pragma experimental ABIEncoderV2;
+
+import "./VerifierLib.sol";
+import "./BlocksDBLib.sol";
+
+contract ADC {
+  uint256 constant RANGE_MOD = 2 ** 128;
+
+  using BlocksDBLib for BlocksDBLib.BlocksDB;
+
+  BlocksDBLib.BlocksDB internal blocksDB;
+
+  constructor()
+  public
+  {
+    blocksDB.init();
+  }
+
+  function saveBlocks()
+  public
+  {
+    blocksDB.saveBlocks();
+  }
+
+  function getCommitmentData(
+    uint256[] memory blocksDBCommitmentNumbers
+  )
+    internal
+    view
+    returns (uint256[2][] memory blockInclusionCommitmentStart)
+  {
+    blockInclusionCommitmentStart = new uint256[2][](blocksDBCommitmentNumbers.length);
+    for (uint256 i = 0; i < blocksDBCommitmentNumbers.length; i++) {
+      uint256 commitmentNumber = blocksDBCommitmentNumbers[i];
+      blockInclusionCommitmentStart[i][0] = uint256(blocksDB.commitments[commitmentNumber]);
+      blockInclusionCommitmentStart[i][1] = blocksDB.blockRanges[commitmentNumber] % RANGE_MOD;
+    }
+  }
+
+  function verifyCGas(
+    uint256[8] memory subStack,
+    // uint256 maxGasPrice,
+    // uint256 disputeGasCost,
+    // uint256 startingBlockNum,
+    // uint256 endingBlockNum,
+    // uint256 pGasClaimed,
+    // uint256 alphaClaimed,
+    // uint256 confidence,
+    // bytes32 pGasCommitment,
+    uint256[2][] memory msmValueWeights,
+    uint256[4][][] memory msmOpenings,
+    bytes[] memory blockHeaders,
+    uint256[] memory blocksDBCommitmentNumbers,
+    bytes32[][] memory blockInclusionProofs,
+    bytes[][] memory txInclusionProofs,
+    bytes[2][] memory txNumKeys
+  )
+    public
+    view
+    returns (uint256)
+  {
+    // uniform lengths
+    uint256 n = msmValueWeights.length;
+    require(msmOpenings.length == n, 'bad msmOpenings len');
+    require(blockHeaders.length == n, 'bad blockHeaders len');
+    require(blocksDBCommitmentNumbers.length == n, 'bad blocksDBCommitmentNumbers len');
+    require(blockInclusionProofs.length == n, 'bad blockInclusionProofs len');
+    require(txInclusionProofs.length == n, 'bad txInclusionProofs len');
+    require(txNumKeys.length == n, 'bad txNumKeys len');
+    // known blocks
+    for (uint i = 0; i < n; i++) {
+      require(blocksDB.verifyBlockInclusion(
+        blockHeaders[i],
+        msmValueWeights[i][0] / RANGE_MOD, // value / RANGE_MOD = blockNumber
+        blocksDBCommitmentNumbers[i],
+        blockInclusionProofs[i]), 'bad block inclusion proof');
+    }
+    return VerifierLib.verifyCGas(
+      subStack,
+      msmValueWeights,
+      msmOpenings,
+      blockHeaders,
+      // blockInclusionCommitmentStart,
+      // blockInclusionProofs,
+      txInclusionProofs,
+      txNumKeys);
+  }
+}
