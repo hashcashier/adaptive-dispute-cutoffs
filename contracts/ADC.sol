@@ -107,6 +107,34 @@ contract ADC {
     return VerifierLib.verifyGasPosition(pGasCommitment, pGasClaimed, nonce, prefixSum, leafSum);
   }
 
+  function verifyBlockGas(
+    bytes memory blockHeader,
+    uint256 unusedGas
+  )
+    public
+    pure
+    returns (bool)
+  {
+    return VerifierLib.verifyBlockGas(blockHeader, unusedGas);
+  }
+
+  function verifyTransactionGas(
+    bytes memory blockHeader,
+    uint256 transactionNumber,
+    bytes[2] memory transactionNumberKey,
+    uint256 maxGasPrice,
+    uint256 gasClaimed,
+    bytes[] memory txInclusionProof,
+    bytes[] memory receiptInclusionProof,
+    bytes[] memory priorReceiptInclusionProof
+  )
+    public
+    pure
+    returns (bool)
+  {
+    return VerifierLib.verifyTransactionGas(blockHeader, transactionNumber, transactionNumberKey, maxGasPrice, gasClaimed, txInclusionProof, receiptInclusionProof, priorReceiptInclusionProof);
+  }
+
   // function getCommitmentData(
   //   uint256[] memory blocksDBCommitmentNumbers
   // )

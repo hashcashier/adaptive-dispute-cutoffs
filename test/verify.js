@@ -104,23 +104,56 @@ contract("ADC", async accounts => {
     let pGasLeaves = [];
     for(var blockNum = initialBlockNumber - 1; blockNum < lastBlockNumber; blockNum++) {
       let queriedBlock = await web3.eth.getBlock(blockNum);
+      let referenceBlockData = await rpc.eth_getBlockByNumber(blockNum, false);
+      let referenceBlockHeader = Header.fromRpc(referenceBlockData).toHex();
+
+      let prevKey = '0x', prevReceiptProof = [];
+
       for(var i = 0; i < queriedBlock.transactions.length; i++) {
         let queriedTransaction = await rpc.eth_getTransactionByHash(queriedBlock.transactions[i]);
         let queriedReceipt = await rpc.eth_getTransactionReceipt(queriedTransaction.hash);
-        // let receipt = Receipt.fromRpc(queriedReceipt);
-        // let transaction = Transaction.fromRpc(queriedTransaction);
-        // console.log(queriedTransaction);
-        // console.log(transaction);
-        // console.log(queriedReceipt);
-        // console.log(receipt);
-        // console.log(await prover.transactionProof(block.transactions[i]))
         let value = new BN(blockNum).mul(RANGE_MOD).addn(i);
         let weight = new BN(queriedReceipt.gasUsed.slice(2), 16).toNumber();
         pGasLeaves.push([value, weight]);
+
+        let transaction = Transaction.fromRpc(queriedTransaction);
+        let transactionProof = await prover.transactionProof(queriedBlock.transactions[i]);
+        let receipt = Receipt.fromRpc(queriedReceipt);
+        let receiptProof = await prover.receiptProof(queriedBlock.transactions[i]);
+
+        let transactionKey = encodeRLP(transactionProof.txIndex);
+
+        console.log([
+          referenceBlockHeader,
+          i,
+          [transactionKey, prevKey],
+          250000,
+          21000,
+          procTrieProof(transactionProof.txProof),
+          procTrieProof(receiptProof.receiptProof),
+          prevReceiptProof
+        ]);
+        assert.equal(
+          await instance.verifyTransactionGas(
+            referenceBlockHeader,
+            i,
+            [transactionKey, prevKey],
+            250000,
+            21000,
+            procTrieProof(transactionProof.txProof),
+            procTrieProof(receiptProof.receiptProof),
+            prevReceiptProof),
+          true);
+        prevKey = transactionKey;
+        prevReceiptProof = procTrieProof(receiptProof.receiptProof);
       }
       let value = new BN(blockNum).mul(RANGE_MOD).add(BLOCK_MARKER);
       let weight = queriedBlock.gasLimit - queriedBlock.gasUsed;
       pGasLeaves.push([value, weight]);
+
+      assert.equal(
+        await instance.verifyBlockGas(referenceBlockHeader, weight),
+        true);
     }
     // console.log(pGasLeaves);
     let pGasTreeBoundary = new BN(lastBlockNumber).mul(RANGE_MOD);
