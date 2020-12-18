@@ -30,6 +30,8 @@ contract("ADC", async accounts => {
   const DUMMY_BLOCKS = 4;
   const TX_PER_DUM_BLOCK = 32;
 
+  const CHALLENGES = 13;
+
   var initialBlockNumber;
   var lastBlockNumber;
 
@@ -92,14 +94,14 @@ contract("ADC", async accounts => {
       blockCommitments.commitments[0],
       blockHashTree[blockHashTreeHeight - 1][0]);
     // verify all block inclusion proofs will pass
-    for (var i = 0; i < blockHashes.length; i++) {
-      let res = await instance.verifyTreeMembership(
-        blockHashTree[blockHashTreeHeight - 1][0],
-        blockHashes[i],
-        i,
-        merkleProof(blockHashTree, i));
-      assert.equal(res, true);
-    }
+    // for (var i = 0; i < blockHashes.length; i++) {
+    //   let res = await instance.verifyTreeMembership(
+    //     blockHashTree[blockHashTreeHeight - 1][0],
+    //     blockHashes[i],
+    //     i,
+    //     merkleProof(blockHashTree, i));
+    //   assert.equal(res, true);
+    // }
     // construct pGas argument
     let pGasLeaves = [];
     for(var blockNum = initialBlockNumber - 1; blockNum < lastBlockNumber; blockNum++) {
@@ -125,17 +127,17 @@ contract("ADC", async accounts => {
 
         let transactionKey = encodeRLP(transactionProof.txIndex);
 
-        assert.equal(
-          await instance.verifyTransactionGas(
-            referenceBlockHeader,
-            i,
-            [transactionKey, prevKey],
-            queriedTransaction.gasPrice,
-            queriedReceipt.gasUsed,
-            procTrieProof(transactionProof.txProof),
-            procTrieProof(receiptProof.receiptProof),
-            prevReceiptProof),
-          true);
+        // assert.equal(
+        //   await instance.verifyTransactionGas(
+        //     referenceBlockHeader,
+        //     i,
+        //     [transactionKey, prevKey],
+        //     queriedTransaction.gasPrice,
+        //     queriedReceipt.gasUsed,
+        //     procTrieProof(transactionProof.txProof),
+        //     procTrieProof(receiptProof.receiptProof),
+        //     prevReceiptProof),
+        //   true);
         prevKey = transactionKey;
         prevReceiptProof = procTrieProof(receiptProof.receiptProof);
       }
@@ -143,9 +145,9 @@ contract("ADC", async accounts => {
       let weight = queriedBlock.gasLimit - queriedBlock.gasUsed;
       // pGasLeaves.push([value, weight]);
 
-      assert.equal(
-        await instance.verifyBlockGas(referenceBlockHeader, weight),
-        true);
+      // assert.equal(
+      //   await instance.verifyBlockGas(referenceBlockHeader, weight),
+      //   true);
     }
     // console.log(pGasLeaves);
     let pGasTreeBoundary = new BN(lastBlockNumber).mul(RANGE_MOD);
@@ -153,32 +155,34 @@ contract("ADC", async accounts => {
     let pGasTreeHeight = pGasTree.length;
     let pGasCommitment = pGasTree[pGasTreeHeight - 1][0][0];
     let pGasClaimed = pGasTree[pGasTreeHeight - 1][0][1];
-    let tempPrefixSum = 0;
-    for (var i = 0; i < pGasLeaves.length; i++) {
-      let proof = merkleProof(pGasTree, i);
-      let prefixSum = await instance.verifyGasCommitmentOpening(
-        pGasCommitment,
-        pGasLeaves[i],
-        proof,
-        initialBlockNumber - 1,
-        lastBlockNumber,
-        pGasClaimed);
-      assert.equal(prefixSum, tempPrefixSum);
-      tempPrefixSum += pGasLeaves[i][1];
-    }
+
+    // let tempPrefixSum = 0;
+    // for (var i = 0; i < pGasLeaves.length; i++) {
+    //   let proof = merkleProof(pGasTree, i);
+    //   let prefixSum = await instance.verifyGasCommitmentOpening(
+    //     pGasCommitment,
+    //     pGasLeaves[i],
+    //     proof,
+    //     initialBlockNumber - 1,
+    //     lastBlockNumber,
+    //     pGasClaimed);
+    //   assert.equal(prefixSum, tempPrefixSum);
+    //   tempPrefixSum += pGasLeaves[i][1];
+    // }
+
     let pGasChallenges = [];
     let pGasResponses = [];
     let alphasClaimed = [];
-    for(var i = 0; i < 128; i++) {
+    for(var i = 0; i < CHALLENGES; i++) {
       // uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, nonce))) % pGasClaimed;
       let hashValue = web3.utils.soliditySha3(
         {type: 'bytes32', value: pGasCommitment},
         {type: 'uint256', value: i},
       )
       let g = new BN(hashValue.slice(2), 16).modn(pGasClaimed);
-      assert.equal(
-        await instance.calculateChallenge(pGasCommitment, pGasClaimed, i),
-        g);
+      // assert.equal(
+      //   await instance.calculateChallenge(pGasCommitment, pGasClaimed, i),
+      //   g);
       pGasChallenges.push(g);
       let prefixSum = 0;
       let leafSum = 0;
@@ -190,9 +194,9 @@ contract("ADC", async accounts => {
         }
         prefixSum += pGasLeaves[j][1];
       }
-      assert.equal(
-        await instance.verifyGasPosition(pGasCommitment, pGasClaimed, i, prefixSum, leafSum),
-        true);
+      // assert.equal(
+      //   await instance.verifyGasPosition(pGasCommitment, pGasClaimed, i, prefixSum, leafSum),
+      //   true);
 
       let l = 0, r = 2 ** 20, v = 0;
       while (l < r) {
@@ -216,7 +220,7 @@ contract("ADC", async accounts => {
     let blockInclusionProofs = [];
     let txInclusionProofs = [];
     let txNumKeys = [];
-    for (var i = 0; i < 128; i++) {
+    for (var i = 0; i < CHALLENGES; i++) {
       let j = pGasResponses[i];
       msmValueWeights.push(pGasLeaves[j]);
       let pGasProof = merkleProof(pGasTree, j);
