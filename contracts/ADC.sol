@@ -118,6 +118,30 @@ contract ADC {
     return VerifierLib.verifyBlockGas(blockHeader, unusedGas);
   }
 
+  function verifyPGas(
+    uint256 n,
+    uint256 pGasClaimed,
+    uint256 alphaClaimed
+  )
+    public
+    pure
+    returns (uint256)
+  {
+    return VerifierLib.verifyPGas(n, pGasClaimed, alphaClaimed);
+  }
+
+  function minCGas(
+    uint256 pGas,
+    uint256 disputeGasCost,
+    uint256 blocks
+  )
+    public
+    pure
+    returns (uint256)
+  {
+    return VerifierLib.minCGas(pGas, disputeGasCost, blocks);
+  }
+
   function verifyTransactionGas(
     bytes memory blockHeader,
     uint256 transactionNumber,
@@ -133,6 +157,18 @@ contract ADC {
     returns (bool)
   {
     return VerifierLib.verifyTransactionGas(blockHeader, transactionNumber, transactionNumberKey, maxGasPrice, gasClaimed, txInclusionProof, receiptInclusionProof, priorReceiptInclusionProof);
+  }
+
+  function calculateChallenge(
+    bytes32 pGasCommitment,
+    uint256 pGasClaimed,
+    uint256 nonce
+  )
+    public
+    pure
+    returns (uint256)
+  {
+    return VerifierLib.calculateChallenge(pGasCommitment, pGasClaimed, nonce);
   }
 
   // function getCommitmentData(
@@ -151,14 +187,13 @@ contract ADC {
   // }
 
   function verifyCGas(
-    uint256[8] memory subStack,
+    uint256[7] memory subStack,
     // uint256 maxGasPrice,
     // uint256 disputeGasCost,
     // uint256 startingBlockNum,
     // uint256 endingBlockNum,
     // uint256 pGasClaimed,
     // uint256 alphaClaimed,
-    // uint256 confidence,
     // bytes32 pGasCommitment,
     uint256[2][] memory msmValueWeights,
     uint256[4][][] memory msmOpenings,
@@ -178,7 +213,7 @@ contract ADC {
     require(blockHeaders.length == n, 'bad blockHeaders len');
     require(blocksDBCommitmentNumbers.length == n, 'bad blocksDBCommitmentNumbers len');
     require(blockInclusionProofs.length == n, 'bad blockInclusionProofs len');
-    require(txInclusionProofs.length == n, 'bad txInclusionProofs len');
+    require(txInclusionProofs.length == 3*n, 'bad txInclusionProofs len');
     require(txNumKeys.length == n, 'bad txNumKeys len');
     // known blocks
     for (uint i = 0; i < n; i++) {
@@ -193,8 +228,6 @@ contract ADC {
       msmValueWeights,
       msmOpenings,
       blockHeaders,
-      // blockInclusionCommitmentStart,
-      // blockInclusionProofs,
       txInclusionProofs,
       txNumKeys);
   }

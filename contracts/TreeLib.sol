@@ -180,7 +180,7 @@ library TreeLib {
         }
       }
       // derive parent node
-      valueWeight[1] += siblingsCommitWeightMinMax[i][1];
+      prefixMinMaxSum[3] += siblingsCommitWeightMinMax[i][1];
       if (linkLeft) {
         prefixMinMaxSum[1] = siblingsCommitWeightMinMax[i][2];
       } else {
@@ -190,7 +190,7 @@ library TreeLib {
         i,
         linkLeft ? keccak256(abi.encodePacked(siblingsCommitWeightMinMax[i][0], commitment))
                  : keccak256(abi.encodePacked(commitment, siblingsCommitWeightMinMax[i][0])),
-        valueWeight[1],
+        prefixMinMaxSum[3],
         prefixMinMaxSum[1],
         prefixMinMaxSum[2]));
       // calculate prefixSum
@@ -198,7 +198,6 @@ library TreeLib {
         prefixMinMaxSum[0] += siblingsCommitWeightMinMax[i][1];
       }
       // calculate totalSum
-      prefixMinMaxSum[3] += siblingsCommitWeightMinMax[i][1];
     }
     require(commitment == root, 'bad msm tree member');
     return prefixMinMaxSum;

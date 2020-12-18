@@ -36,22 +36,21 @@ library VerifierLib {
   function verifyPGas(
     uint256 n,
     uint256 pGasClaimed,
-    uint256 alphaClaimed,
-    uint256 confidence
+    uint256 alphaClaimed
   )
     public
     pure
     returns (uint256)
   {
-    require(alphaClaimed < ALPHA_DENOM);
+    return pGasClaimed * alphaClaimed / ALPHA_DENOM;
+    require(alphaClaimed < ALPHA_DENOM, 'aC < AD');
     bytes16 alpha = ABDKMathQuad.div(ABDKMathQuad.fromUInt(alphaClaimed), ABDKMathQuad.fromUInt(ALPHA_DENOM));
     bytes16 alpha_n = ABDKMathQuad.fromUInt(1);
     for (uint256 i = 0; i < n; i++) {
       alpha_n = ABDKMathQuad.mul(alpha, alpha_n);
     }
-    require(confidence < 100);
     bytes16 lambda = ABDKMathQuad.pow_2(ABDKMathQuad.fromInt(ERR_PROB_EXPON));
-    require(ABDKMathQuad.cmp(alpha_n, lambda) < 0);
+    require(ABDKMathQuad.cmp(alpha_n, lambda) < 0, 'cmp < 0');
     return pGasClaimed * alphaClaimed / ALPHA_DENOM;
   }
 
@@ -90,6 +89,7 @@ library VerifierLib {
       transactionNumberKey[0],
       txInclusionProof);
       // txGasPrice <= maxGasPrice
+    require(DecodeLib.decodeGasPrice(transaction) <= maxGasPrice, '> maxGasPrice');
     if (DecodeLib.decodeGasPrice(transaction) > maxGasPrice) {
       return false;
     }
@@ -108,6 +108,7 @@ library VerifierLib {
         priorReceiptInclusionProof);
       gasUsed = gasUsed - DecodeLib.decodeGasUsed(receiptPrior);
     }
+    require(gasClaimed == gasUsed, 'gasClaimed == gasUsed');
     return gasClaimed == gasUsed;
   }
 
@@ -134,6 +135,18 @@ library VerifierLib {
       blockInclusionProof);
   }
 
+  function calculateChallenge(
+    bytes32 pGasCommitment,
+    uint256 pGasClaimed,
+    uint256 nonce
+  )
+    internal
+    pure
+    returns (uint256)
+  {
+    return uint256(keccak256(abi.encodePacked(pGasCommitment, nonce))) % pGasClaimed;
+  }
+
   function verifyGasPosition(
     bytes32 pGasCommitment,
     uint256 pGasClaimed,
@@ -145,7 +158,12 @@ library VerifierLib {
     pure
     returns (bool)
   {
-    uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, nonce))) % pGasClaimed;
+    uint256 g = calculateChallenge(pGasCommitment, pGasClaimed, nonce);
+    require(prefixSum < g, 'pS < g');
+    require(g <= prefixSum + leafSum, 'g <= pS + lS');
+    require(prefixSum <= pGasClaimed, 'pS < pGC');
+    require(leafSum <= pGasClaimed, 'lS < pGC');
+    require(prefixSum + leafSum <= pGasClaimed, 'pS + lS <= pGC');
     return prefixSum < g && g <= prefixSum + leafSum && prefixSum + leafSum <= pGasClaimed;
   }
 
@@ -175,16 +193,14 @@ library VerifierLib {
 
   function verifyCGas(
     //BlocksDB storage self,
-    uint256[8] memory subStack,
+    uint256[7] memory subStack,
     // uint256 maxGasPrice,
     // uint256 disputeGasCost,
     // uint256 startingBlockNum,
     // uint256 endingBlockNum,
     // uint256 pGasClaimed,
     // uint256 alphaClaimed,
-    // uint256 confidence,
     // bytes32 pGasCommitment,
-    // uint256 boundary,
     uint256[2][] memory msmValueWeights,
     uint256[4][][] memory msmOpenings,
     bytes[] memory blockHeaders,
@@ -199,14 +215,14 @@ library VerifierLib {
   {
     for (uint256 i = 0; i < msmOpenings.length; i++) {
       uint256 prefixSum = verifyGasCommitmentOpening(
-        bytes32(subStack[7]),
+        bytes32(subStack[6]),
         msmValueWeights[i],
         msmOpenings[i],
         subStack[2], // startingBlockNum
         subStack[3], // endingBlockNum
         subStack[4]); // pGasClaimed
       require(verifyGasPosition(
-        bytes32(subStack[7]),
+        bytes32(subStack[6]), // pGasCommitment
         subStack[4], // pGasClaimed
         i, // nonce
         prefixSum, // prefixSum
@@ -233,7 +249,6 @@ library VerifierLib {
     uint256 pGasVerified = verifyPGas(
       msmOpenings.length,
       subStack[4], // pGasClaimed
-      subStack[6], // confidence
       subStack[5]); // alphaClaimed
     return minCGas(
       pGasVerified,

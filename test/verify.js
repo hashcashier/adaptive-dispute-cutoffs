@@ -116,6 +116,8 @@ contract("ADC", async accounts => {
         let weight = new BN(queriedReceipt.gasUsed.slice(2), 16).toNumber();
         pGasLeaves.push([value, weight]);
 
+        continue;
+
         let transaction = Transaction.fromRpc(queriedTransaction);
         let transactionProof = await prover.transactionProof(queriedBlock.transactions[i]);
         let receipt = Receipt.fromRpc(queriedReceipt);
@@ -123,23 +125,13 @@ contract("ADC", async accounts => {
 
         let transactionKey = encodeRLP(transactionProof.txIndex);
 
-        console.log([
-          referenceBlockHeader,
-          i,
-          [transactionKey, prevKey],
-          250000,
-          21000,
-          procTrieProof(transactionProof.txProof),
-          procTrieProof(receiptProof.receiptProof),
-          prevReceiptProof
-        ]);
         assert.equal(
           await instance.verifyTransactionGas(
             referenceBlockHeader,
             i,
             [transactionKey, prevKey],
-            250000,
-            21000,
+            queriedTransaction.gasPrice,
+            queriedReceipt.gasUsed,
             procTrieProof(transactionProof.txProof),
             procTrieProof(receiptProof.receiptProof),
             prevReceiptProof),
@@ -149,7 +141,7 @@ contract("ADC", async accounts => {
       }
       let value = new BN(blockNum).mul(RANGE_MOD).add(BLOCK_MARKER);
       let weight = queriedBlock.gasLimit - queriedBlock.gasUsed;
-      pGasLeaves.push([value, weight]);
+      // pGasLeaves.push([value, weight]);
 
       assert.equal(
         await instance.verifyBlockGas(referenceBlockHeader, weight),
@@ -161,18 +153,22 @@ contract("ADC", async accounts => {
     let pGasTreeHeight = pGasTree.length;
     let pGasCommitment = pGasTree[pGasTreeHeight - 1][0][0];
     let pGasClaimed = pGasTree[pGasTreeHeight - 1][0][1];
+    let tempPrefixSum = 0;
     for (var i = 0; i < pGasLeaves.length; i++) {
       let proof = merkleProof(pGasTree, i);
-      let res = await instance.verifyGasCommitmentOpening(
+      let prefixSum = await instance.verifyGasCommitmentOpening(
         pGasCommitment,
         pGasLeaves[i],
         proof,
         initialBlockNumber - 1,
         lastBlockNumber,
         pGasClaimed);
+      assert.equal(prefixSum, tempPrefixSum);
+      tempPrefixSum += pGasLeaves[i][1];
     }
     let pGasChallenges = [];
     let pGasResponses = [];
+    let alphasClaimed = [];
     for(var i = 0; i < 128; i++) {
       // uint256 g = uint256(keccak256(abi.encodePacked(pGasCommitment, nonce))) % pGasClaimed;
       let hashValue = web3.utils.soliditySha3(
@@ -180,6 +176,9 @@ contract("ADC", async accounts => {
         {type: 'uint256', value: i},
       )
       let g = new BN(hashValue.slice(2), 16).modn(pGasClaimed);
+      assert.equal(
+        await instance.calculateChallenge(pGasCommitment, pGasClaimed, i),
+        g);
       pGasChallenges.push(g);
       let prefixSum = 0;
       let leafSum = 0;
@@ -194,6 +193,114 @@ contract("ADC", async accounts => {
       assert.equal(
         await instance.verifyGasPosition(pGasCommitment, pGasClaimed, i, prefixSum, leafSum),
         true);
+
+      let l = 0, r = 2 ** 20, v = 0;
+      while (l < r) {
+        let m = (l+r)>>1;
+        let alpha = (1.0 * m) / (2.0 ** 20);
+        if ((alpha ** i) < (2.0 **-80)) {
+          v = m;
+          l = m+1;
+        } else {
+          r = m-1;
+        }
+      }
+      alphasClaimed.push(v);
+    }
+    // console.log(alphasClaimed);
+
+    let msmValueWeights = [];
+    let msmOpenings = [];
+    let blockHeaders = [];
+    let blocksDBCommitmentNumbers = [];
+    let blockInclusionProofs = [];
+    let txInclusionProofs = [];
+    let txNumKeys = [];
+    for (var i = 0; i < 128; i++) {
+      let j = pGasResponses[i];
+      msmValueWeights.push(pGasLeaves[j]);
+      let pGasProof = merkleProof(pGasTree, j);
+      msmOpenings.push(pGasProof);
+
+      let blockNum = pGasLeaves[j][0].div(RANGE_MOD).toNumber();
+      let referenceBlockData = await rpc.eth_getBlockByNumber(blockNum, false);
+      let referenceBlockHeader = Header.fromRpc(referenceBlockData).toHex();
+      blockHeaders.push(referenceBlockHeader);
+
+      blocksDBCommitmentNumbers.push(0);
+      let blockIndex = blockNum - (initialBlockNumber - 1);
+      blockInclusionProofs.push(merkleProof(blockHashTree, blockIndex));
+
+      let txNum = pGasLeaves[j][0].mod(RANGE_MOD);
+
+      if (txNum.eq(BLOCK_MARKER)) {
+        // console.log(`${pGasChallenges[i]} BLOCK_MARKER`)
+        txInclusionProofs.push([]);
+        txInclusionProofs.push([]);
+        txInclusionProofs.push([]);
+        txNumKeys.push([[], []]);
+      } else {
+        txNum = txNum.toNumber();
+        // console.log(`${pGasChallenges[i]} ${txNum}`)
+        let queriedBlock = await web3.eth.getBlock(blockNum);
+        let transactionProof = await prover.transactionProof(queriedBlock.transactions[txNum]);
+        let receiptProof = await prover.receiptProof(queriedBlock.transactions[txNum]);
+
+        let transactionKey = encodeRLP(transactionProof.txIndex);
+        txInclusionProofs.push(procTrieProof(transactionProof.txProof));
+        txInclusionProofs.push(procTrieProof(receiptProof.receiptProof));
+
+        if (txNum == 0) {
+          txInclusionProofs.push([]);
+          txNumKeys.push([transactionKey, []])
+        } else {
+          let prevReceiptProof = await prover.receiptProof(queriedBlock.transactions[txNum-1]);
+
+          txInclusionProofs.push(procTrieProof(prevReceiptProof.receiptProof));
+          txNumKeys.push([transactionKey, encodeRLP(prevReceiptProof.txIndex)])
+        }
+
+      }
+
+      let prefixSum = await instance.verifyGasCommitmentOpening(
+        pGasCommitment,
+        pGasLeaves[j],
+        pGasProof,
+        initialBlockNumber - 1,
+        lastBlockNumber,
+        pGasClaimed);
+      // console.log(`${prefixSum} ${parseInt(prefixSum) + pGasLeaves[j][1]} ${pGasChallenges[i]} ${pGasClaimed}`)
+
+      let subStack = [
+        30000000000,
+        50000,
+        initialBlockNumber - 1,
+        lastBlockNumber,
+        pGasClaimed,
+        alphasClaimed[i],
+        pGasCommitment
+      ];
+      // console.log(alphasClaimed[i]);
+      // console.log([
+      //   subStack,
+      //   msmValueWeights,
+      //   msmOpenings,
+      //   blockHeaders,
+      //   blocksDBCommitmentNumbers,
+      //   blockInclusionProofs,
+      //   txInclusionProofs,
+      //   txNumKeys]);
+
+      let verifyCGas = await instance.verifyCGas.sendTransaction(
+        subStack,
+        msmValueWeights,
+        msmOpenings,
+        blockHeaders,
+        blocksDBCommitmentNumbers,
+        blockInclusionProofs,
+        txInclusionProofs,
+        txNumKeys);
+      console.log(`${i}, ${verifyCGas.receipt.gasUsed}`);
     }
 
     // let queriedBlock = await web3.eth.getBlock(queriedBlockNumber);
