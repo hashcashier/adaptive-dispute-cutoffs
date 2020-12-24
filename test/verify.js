@@ -27,10 +27,10 @@ contract("ADC", async accounts => {
   const RANGE_MOD = new BN(1).shln(128);
   const BLOCK_MARKER = RANGE_MOD.subn(1);
 
-  const DUMMY_BLOCKS = 4;
+  const DUMMY_BLOCKS = 12;
   const TX_PER_DUM_BLOCK = 32;
 
-  const CHALLENGES = 13;
+  const CHALLENGES = 24;
 
   var initialBlockNumber;
   var lastBlockNumber;
@@ -62,11 +62,12 @@ contract("ADC", async accounts => {
     //   console.log(`${res.commitments[i]}: ${res.blockRanges[i].mod(RANGE_MOD)}, ${res.blockRanges[i].div(RANGE_MOD)}`)
     // }
     // verify override
-    await instance.saveBlocks();
+    let saveTx = await instance.saveBlocks.sendTransaction();
     lastBlockNumber = (await web3.eth.getBlock("latest")).number;
     res = await instance.getBlocks.call();
     n = res.blockRanges.length;
     assert.equal(n, 1);
+    console.log(`saveBlocks ${saveTx.receipt.gasUsed}`)
     // for (var i = 0; i < n; i++) {
     //   console.log(`${res.commitments[i]}: ${res.blockRanges[i].mod(RANGE_MOD)}, ${res.blockRanges[i].div(RANGE_MOD)}`)
     // }
@@ -110,6 +111,10 @@ contract("ADC", async accounts => {
       let referenceBlockHeader = Header.fromRpc(referenceBlockData).toHex();
 
       let prevKey = '0x', prevReceiptProof = [];
+
+      if (queriedBlock.transactions.length == 1) {
+        continue;
+      }
 
       for(var i = 0; i < queriedBlock.transactions.length; i++) {
         let queriedTransaction = await rpc.eth_getTransactionByHash(queriedBlock.transactions[i]);
@@ -211,7 +216,7 @@ contract("ADC", async accounts => {
       }
       alphasClaimed.push(v);
     }
-    // console.log(alphasClaimed);
+    console.log(alphasClaimed);
 
     let msmValueWeights = [];
     let msmOpenings = [];
@@ -304,7 +309,7 @@ contract("ADC", async accounts => {
         blockInclusionProofs,
         txInclusionProofs,
         txNumKeys);
-      console.log(`${i}, ${verifyCGas.receipt.gasUsed}`);
+      console.log(`${alphasClaimed[i]}: ${verifyCGas.receipt.gasUsed},`);
     }
 
     // let queriedBlock = await web3.eth.getBlock(queriedBlockNumber);

@@ -33,6 +33,21 @@ library VerifierLib {
     }
   }
 
+  function exponentiateAlpha(
+    uint256 alphaClaimed,
+    uint256 n
+  )
+    public
+    pure
+    returns (bytes16)
+  {
+    require(alphaClaimed < ALPHA_DENOM, 'aC < AD');
+    bytes16 alpha = ABDKMathQuad.div(ABDKMathQuad.fromUInt(alphaClaimed), ABDKMathQuad.fromUInt(ALPHA_DENOM));
+    bytes16 log_alpha = ABDKMathQuad.ln(alpha);
+    bytes16 exponent = ABDKMathQuad.mul(log_alpha, ABDKMathQuad.fromUInt(n));
+    return ABDKMathQuad.exp(exponent);
+  }
+
   function verifyPGas(
     uint256 n,
     uint256 pGasClaimed,
@@ -42,13 +57,7 @@ library VerifierLib {
     pure
     returns (uint256)
   {
-    return pGasClaimed * alphaClaimed / ALPHA_DENOM;
-    require(alphaClaimed < ALPHA_DENOM, 'aC < AD');
-    bytes16 alpha = ABDKMathQuad.div(ABDKMathQuad.fromUInt(alphaClaimed), ABDKMathQuad.fromUInt(ALPHA_DENOM));
-    bytes16 alpha_n = ABDKMathQuad.fromUInt(1);
-    for (uint256 i = 0; i < n; i++) {
-      alpha_n = ABDKMathQuad.mul(alpha, alpha_n);
-    }
+    bytes16 alpha_n = exponentiateAlpha(alphaClaimed, n);
     bytes16 lambda = ABDKMathQuad.pow_2(ABDKMathQuad.fromInt(ERR_PROB_EXPON));
     require(ABDKMathQuad.cmp(alpha_n, lambda) < 0, 'cmp < 0');
     return pGasClaimed * alphaClaimed / ALPHA_DENOM;
