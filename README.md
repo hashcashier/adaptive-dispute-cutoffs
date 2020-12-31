@@ -1,4 +1,4 @@
-# Adaptive layer-two dispute periods in blockchains
+# Adaptive layer-two dispute periods in blockchains - by Rami 
 
 A proof of concept implementation for EVM.
 
